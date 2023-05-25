@@ -5,7 +5,7 @@ yum -y install epel-release
 yum -y install wget curl tar unzip
 
 # 获取本地IP地址
-ip_address=$(hostname -I | awk '{print $1}')
+#ip_address=$(hostname -I | awk '{print $1}')
 
 # 获取用户输入的配置信息
 read -p "请输入后端数据库名称：" db_name

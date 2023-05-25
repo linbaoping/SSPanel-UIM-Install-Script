@@ -1,28 +1,34 @@
 #!/bin/bash
 
-# 检查是否为root用户
-if [ "$EUID" -ne 0 ]; then
-    echo "请以root用户或使用sudo来运行脚本。"
-    exit
-fi
-
-# 获取系统的IP地址
-ip_address=$(curl -s https://api.ipify.org)
-
-# 安装必要的软件和工具
-echo "正在安装必要的软件和工具..."
+# 安装必要的软件和依赖项
+yum update -y
 yum install -y epel-release
-yum install -y httpd mariadb-server php php-mysql git
+yum install -y nginx php php-fpm php-mysqlnd mysql-server composer git
 
-# 配置和启动Web服务器（LAMP堆栈）
-echo "正在配置和启动Web服务器..."
-systemctl start httpd
-systemctl enable httpd
+# 配置Nginx
+cat << EOF > /etc/nginx/conf.d/sspanel.conf
+server {
+    listen 8888;
+    server_name _;
+    root /path/to/sspanel-uim/public;
+    index index.php index.html;
 
-# 配置数据库
-echo "正在配置数据库..."
-systemctl start mariadb
-systemctl enable mariadb
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php-fpm/php-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include fastcgi_params;
+    }
+}
+EOF
+
+# 配置MySQL
+systemctl start mysqld
+systemctl enable mysqld
 mysql_secure_installation <<EOF
 
 y
@@ -34,32 +40,22 @@ y
 y
 EOF
 
-# 克隆SSPanel-Uim项目
-echo "正在克隆SSPanel-Uim项目..."
-cd /var/www/html/ || exit
-git clone https://github.com/Anankke/SSPanel-Uim.git
-
-# 配置和安装SSPanel-Uim
-echo "正在配置和安装SSPanel-Uim..."
-cd SSPanel-Uim || exit
-cp .env.example .env
+# 下载和安装SSPanel-Uim
+git clone https://github.com/Anankke/SSPanel-Uim.git /path/to/sspanel-uim
+cd /path/to/sspanel-uim
 composer install --no-dev
-php artisan key:generate
-php artisan migrate --seed
 
-# 配置Web服务器
-echo "正在配置Web服务器..."
-echo "<VirtualHost *:8888>
-    ServerName $ip_address
-    DocumentRoot /var/www/html/SSPanel-Uim/public
-    <Directory /var/www/html/SSPanel-Uim/public>
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>" > /etc/httpd/conf.d/sspanel.conf
+# 配置SSPanel-Uim
+cp .env.example .env
+php xcat initenv
+php xcat key:generate
+php xcat migrate
+php xcat initdownload
+php xcat resetTraffic
 
-systemctl restart httpd
+# 重启服务
+systemctl start nginx
+systemctl enable nginx
+systemctl restart php-fpm
 
-# 完成安装
-echo "SSPanel-Uim已成功安装！"
-echo "请在浏览器中访问 http://$ip_address:8888 ，按照向导完成设置。"
+echo "SSPanel-Uim已成功安装和配置！"

@@ -67,7 +67,8 @@ sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$db_password/" .env
 sed -i "s/APP_URL=.*/APP_URL=http:\/\/$backend_domain:$backend_port/" .env
 
 # 配置SSPanel UIM前端
-sed -i "s/const APP_NAME = 'SSPanel UIM';/const APP_NAME = 'SSPanel UIM';\nconst FRONTEND_USERNAME = '$frontend_username';/" resources/lang/en/app.php
+mkdir -p resources/lang/en
+echo -e "<?php\n\nconst APP_NAME = 'SSPanel UIM';\nconst FRONTEND_USERNAME = '$frontend_username';" > resources/lang/en/app.php
 
 # 设置文件权限
 chown -R nginx:nginx /var/www/html/sspanel
@@ -89,14 +90,15 @@ server {
     location ~ \.php$ {
         fastcgi_pass unix:/var/run/php-fpm/php-fpm.sock;
         fastcgi_index index.php;
+       
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
     }
 }
 EOF
 
-# 重启Nginx
-# 重启Nginx
+# 重启Nginx和PHP-FPM
 systemctl restart nginx
+systemctl restart php-fpm
 
-echo "安装完成！请访问 http://$backend_domain:$backend_port 进行配置。"
+echo "安装完成！"

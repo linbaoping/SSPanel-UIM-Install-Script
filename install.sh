@@ -1,104 +1,65 @@
 #!/bin/bash
 
-# 检查是否以root用户身份运行脚本
-if [[ $EUID -ne 0 ]]; then
-    echo "请以root用户身份运行该脚本。"
-    exit 1
+# 检查是否为root用户
+if [ "$EUID" -ne 0 ]; then
+    echo "请以root用户或使用sudo来运行脚本。"
+    exit
 fi
 
-# 安装依赖软件包
-yum -y install epel-release
-yum -y install wget curl tar unzip
+# 获取系统的IP地址
+ip_address=$(curl -s https://api.ipify.org)
 
-# 获取本地IP地址
-ip_address=$(hostname -I | awk '{print $1}')
+# 安装必要的软件和工具
+echo "正在安装必要的软件和工具..."
+yum install -y epel-release
+yum install -y httpd mariadb-server php php-mysql git
 
-# 获取用户输入的配置信息
-read -p "请输入后端数据库名称：" db_name
-read -p "请输入后端数据库密码：" db_password
-read -p "请输入后端域名（使用本地IP地址：$ip_address）：" backend_domain
-read -p "请输入后端端口号：" backend_port
-read -p "请输入前端登录用户名：" frontend_username
-read -p "请输入前端登录密码：" frontend_password
+# 配置和启动Web服务器（LAMP堆栈）
+echo "正在配置和启动Web服务器..."
+systemctl start httpd
+systemctl enable httpd
 
-# 安装MySQL
-yum -y install mariadb-server mariadb
+# 配置数据库
+echo "正在配置数据库..."
 systemctl start mariadb
 systemctl enable mariadb
-
-# 配置MySQL
 mysql_secure_installation <<EOF
 
 y
-$db_password
-$db_password
+your_mysql_root_password
+your_mysql_root_password
 y
 y
 y
 y
 EOF
 
-# 安装Nginx
-yum -y install nginx
-systemctl start nginx
-systemctl enable nginx
+# 克隆SSPanel-Uim项目
+echo "正在克隆SSPanel-Uim项目..."
+cd /var/www/html/ || exit
+git clone https://github.com/Anankke/SSPanel-Uim.git
 
-# 安装PHP和相关扩展
-yum -y install php php-fpm php-mysql php-mbstring php-xml php-gd php-json
-
-# 配置PHP-FPM
-sed -i 's/;cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/' /etc/php.ini
-systemctl start php-fpm
-systemctl enable php-fpm
-
-# 下载SSPanel UIM
-cd /var/www/html
-wget -O dev.zip https://github.com/Anankke/SSPanel-Uim/archive/refs/heads/dev.zip
-unzip dev.zip
-mv SSPanel-Uim-dev sspanel
-rm dev.zip
-
-# 配置SSPanel UIM后端
-cd sspanel
+# 配置和安装SSPanel-Uim
+echo "正在配置和安装SSPanel-Uim..."
+cd SSPanel-Uim || exit
 cp .env.example .env
-sed -i "s/DB_DATABASE=.*/DB_DATABASE=$db_name/" .env
-sed -i "s/DB_USERNAME=.*/DB_USERNAME=root/" .env
-sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$db_password/" .env
-sed -i "s/APP_URL=.*/APP_URL=http:\/\/$backend_domain:$backend_port/" .env
+composer install --no-dev
+php artisan key:generate
+php artisan migrate --seed
 
-# 配置SSPanel UIM前端
-mkdir -p resources/lang/en
-echo -e "<?php\n\nconst APP_NAME = 'SSPanel UIM';\nconst FRONTEND_USERNAME = '$frontend_username';" > resources/lang/en/app.php
+# 配置Web服务器
+echo "正在配置Web服务器..."
+echo "<VirtualHost *:8888>
+    ServerName $ip_address
+    DocumentRoot /var/www/html/SSPanel-Uim/public
+    <Directory /var/www/html/SSPanel-Uim/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>" > /etc/httpd/conf.d/sspanel.conf
 
-# 设置文件权限
-chown -R nginx:nginx /var/www/html/sspanel
-chmod -R 755 /var/www/html/sspanel/storage
+systemctl restart httpd
 
-# 配置Nginx虚拟主机
-cat > /etc/nginx/conf.d/sspanel.conf <<EOF
-server {
-    listen 80;
-    server_name $backend_domain;
-
-    root /var/www/html/sspanel/public;
-    index index.php;
-
-    location / {
-        try_files \$uri \$uri/ /index.php\$is_args\$args;
-    }
-
-    location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php-fpm/php-fpm.sock;
-        fastcgi_index index.php;
-       
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        include fastcgi_params;
-    }
-}
-EOF
-
-# 重启Nginx和PHP-FPM
-systemctl restart nginx
-systemctl restart php-fpm
-
-echo "安装完成！"
+# 完成安装
+echo "SSPanel-Uim已成功安装！"
+echo "请在浏览器中访问 http://$ip_address:8888 ，按照向导完成设置。"

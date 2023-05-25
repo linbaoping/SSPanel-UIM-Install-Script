@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# 检查是否以root用户身份运行脚本
+if [[ $EUID -ne 0 ]]; then
+    echo "请以root用户身份运行该脚本。"
+    exit 1
+fi
+
 # 安装依赖软件包
 yum -y install epel-release
 yum -y install wget curl tar unzip
@@ -47,7 +53,7 @@ systemctl enable php-fpm
 
 # 下载SSPanel UIM
 cd /var/www/html
-wget https://github.com/Anankke/SSPanel-Uim/archive/refs/heads/dev.zip
+wget -O dev.zip https://github.com/Anankke/SSPanel-Uim/archive/refs/heads/dev.zip
 unzip dev.zip
 mv SSPanel-Uim-dev sspanel
 rm dev.zip
@@ -89,6 +95,7 @@ server {
 }
 EOF
 
+# 重启Nginx
 # 重启Nginx
 systemctl restart nginx
 

@@ -44,7 +44,7 @@ FLUSH PRIVILEGES;
 EOF
 
 # 导入数据库结构
-mysql -u root -p'yourpassword' sspanel_uim < /var/www/html/SSPanel-Uim/sql/glzjin_all.sql
+mysql -u root -p'yourpassword' sspanel_uim < /var/www/html/SSPanel-Uim/db/update.sql
 
 # 配置SSPanel UIM
 cp /var/www/html/SSPanel-Uim/.env.example /var/www/html/SSPanel-Uim/.env

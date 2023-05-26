@@ -1,17 +1,73 @@
 #!/bin/bash
 
-# 安装必要的软件和依赖项
+# 更新系统软件包
 yum update -y
-yum install -y epel-release
-yum install -y nginx php php-fpm php-mysqlnd mysql-server composer git
 
-# 配置Nginx
-cat << EOF > /etc/nginx/conf.d/sspanel.conf
+# 安装必要的软件
+yum install -y epel-release
+yum install -y git nginx mariadb mariadb-server php php-fpm php-mysqlnd
+
+# 启动并设置开机启动服务
+systemctl enable nginx
+systemctl enable mariadb
+systemctl enable php-fpm
+
+# 启动服务
+systemctl start nginx
+systemctl start mariadb
+systemctl start php-fpm
+
+# 配置MariaDB数据库
+mysql_secure_installation <<EOF
+
+y
+yourpassword
+yourpassword
+y
+y
+y
+y
+EOF
+
+# 下载SSPanel UIM源码
+git clone https://github.com/Anankke/SSPanel-Uim.git /var/www/html/SSPanel-Uim
+
+# 设置文件权限
+chown -R nginx:nginx /var/www/html/SSPanel-Uim
+chmod -R 755 /var/www/html/SSPanel-Uim
+
+# 创建SSPanel UIM数据库
+mysql -u root -p'yourpassword' <<EOF
+CREATE DATABASE sspanel_uim DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL ON sspanel_uim.* TO 'sspanel'@'localhost' IDENTIFIED BY 'yourpassword';
+FLUSH PRIVILEGES;
+EOF
+
+# 导入数据库结构
+mysql -u root -p'yourpassword' sspanel_uim < /var/www/html/SSPanel-Uim/sql/glzjin_all.sql
+
+# 配置SSPanel UIM
+cp /var/www/html/SSPanel-Uim/.env.example /var/www/html/SSPanel-Uim/.env
+sed -i 's/DB_DATABASE=sspanel/DB_DATABASE=sspanel_uim/g' /var/www/html/SSPanel-Uim/.env
+sed -i 's/DB_USERNAME=root/DB_USERNAME=sspanel/g' /var/www/html/SSPanel-Uim/.env
+sed -i 's/DB_PASSWORD=/DB_PASSWORD=yourpassword/g' /var/www/html/SSPanel-Uim/.env
+
+# 安装Composer依赖
+curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+cd /var/www/html/SSPanel-Uim
+composer install --no-dev --optimize-autoloader
+
+# 生成密钥
+php artisan key:generate
+
+# 配置Nginx虚拟主机
+cat <<EOF > /etc/nginx/conf.d/sspanel.conf
 server {
-    listen 8888;
-    server_name _;
-    root /path/to/sspanel-uim/public;
-    index index.php index.html;
+    listen 80;
+    server_name yourdomain.com; # 将yourdomain.com替换为你的域名
+
+    root /var/www/html/SSPanel-Uim/public;
+    index index.php index.html index.htm;
 
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
@@ -26,36 +82,7 @@ server {
 }
 EOF
 
-# 配置MySQL
-systemctl start mysqld
-systemctl enable mysqld
-mysql_secure_installation <<EOF
+# 重启Nginx
+systemctl restart nginx
 
-y
-your_mysql_root_password
-your_mysql_root_password
-y
-y
-y
-y
-EOF
-
-# 下载和安装SSPanel-Uim
-git clone https://github.com/Anankke/SSPanel-Uim.git /path/to/sspanel-uim
-cd /path/to/sspanel-uim
-composer install --no-dev
-
-# 配置SSPanel-Uim
-cp .env.example .env
-php xcat initenv
-php xcat key:generate
-php xcat migrate
-php xcat initdownload
-php xcat resetTraffic
-
-# 重启服务
-systemctl start nginx
-systemctl enable nginx
-systemctl restart php-fpm
-
-echo "SSPanel-Uim已成功安装和配置！"
+echo "SSPanel UIM已成功部署！"

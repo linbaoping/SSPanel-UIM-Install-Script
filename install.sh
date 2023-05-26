@@ -44,7 +44,7 @@ FLUSH PRIVILEGES;
 EOF
 
 # 导入数据库结构
-mysql -u root -p'yourpassword' sspanel_uim < /var/www/html/SSPanel-Uim/db/update.sql
+mysql -u root -p'yourpassword' sspanel_uim < /var/www/html/SSPanel-Uim/sql/glzjin_all.sql
 
 # 配置SSPanel UIM
 cp /var/www/html/SSPanel-Uim/.env.example /var/www/html/SSPanel-Uim/.env
@@ -52,8 +52,12 @@ sed -i 's/DB_DATABASE=sspanel/DB_DATABASE=sspanel_uim/g' /var/www/html/SSPanel-U
 sed -i 's/DB_USERNAME=root/DB_USERNAME=sspanel/g' /var/www/html/SSPanel-Uim/.env
 sed -i 's/DB_PASSWORD=/DB_PASSWORD=yourpassword/g' /var/www/html/SSPanel-Uim/.env
 
+# 安装Composer
+php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+php -r "unlink('composer-setup.php');"
+
 # 安装Composer依赖
-curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 cd /var/www/html/SSPanel-Uim
 composer install --no-dev --optimize-autoloader
 
@@ -63,8 +67,8 @@ php artisan key:generate
 # 配置Nginx虚拟主机
 cat <<EOF > /etc/nginx/conf.d/sspanel.conf
 server {
-    listen 80;
-    server_name yourdomain.com; # 将yourdomain.com替换为你的域名
+    listen 8443;
+    server_name www.wanganky.club; # 将yourdomain.com替换为你的域名
 
     root /var/www/html/SSPanel-Uim/public;
     index index.php index.html index.htm;
